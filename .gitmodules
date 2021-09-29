@@ -1,0 +1,9 @@
+[submodule "deps/zig-pixman"]
+	path = deps/zig-pixman
+	url = git@github.com:ifreund/zig-pixman.git
+[submodule "deps/zig-wayland"]
+	path = deps/zig-wayland
+	url = git@github.com:ifreund/zig-wayland.git
+[submodule "deps/zig-fcft"]
+	path = deps/zig-fcft
+	url = git@git.sr.ht:~novakane/zig-fcft
