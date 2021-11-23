@@ -1,4 +1,4 @@
-// This file is part of agertu, popup with information for river
+// This file is part of agertu
 //
 // Copyright (C) 2021 Hugo Machet
 //
@@ -26,12 +26,13 @@ const pixman = @import("pixman");
 const fcft = @import("fcft");
 
 const Buffer = @import("shm.zig").Buffer;
+const BufferStack = @import("shm.zig").BufferStack;
 const Context = @import("client.zig").Context;
 const Surface = @import("Surface.zig");
 const renderer = @import("renderer.zig");
 
 const gpa = std.heap.c_allocator;
-const log = std.log.scoped(.agertu_output);
+const log = std.log.scoped(.output);
 
 const Self = @This();
 
@@ -96,6 +97,36 @@ pub fn updateSurface(self: *Self) !void {
     }
 }
 
+fn notBusyFilter(buffer: *Buffer, context: void) bool {
+    return buffer.busy == false;
+}
+
+pub fn getNextBuffer(self: *Self) !*Buffer {
+    const surface = self.surface.?;
+    var ret: ?*Buffer = null;
+    var it = BufferStack(*Buffer).iter(surface.buffer_stack.first, .forward, {}, notBusyFilter);
+    while (it.next()) |buf| {
+        if (buf.width != surface.width or buf.height != surface.height or
+            buf.wl_buffer == null)
+        {
+            buf.destroy();
+            ret = null;
+            break;
+        }
+        ret = buf;
+    }
+
+    if (ret == null) {
+        log.debug("No Buffer available, creating one", .{});
+        const new_buffer_node = try gpa.create(BufferStack(*Buffer).Node);
+        ret = try Buffer.create(self.ctx.shm.?, surface.width, surface.height);
+        new_buffer_node.buffer = ret.?;
+        surface.buffer_stack.append(new_buffer_node);
+    }
+
+    return ret.?;
+}
+
 /// Draw and commit a frame.
 pub fn renderFrame(self: *Self) !void {
     const config = self.ctx.config;
@@ -105,7 +136,7 @@ pub fn renderFrame(self: *Self) !void {
         return;
     }
 
-    const buffer = try surface.getNextBuffer(self.ctx.shm.?, surface.width, surface.height);
+    const buffer = try self.getNextBuffer();
     const image = buffer.pixman_image orelse return;
 
     // Now the surface is configured and has a buffer, we can safely draw on it.

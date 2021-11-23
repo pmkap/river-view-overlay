@@ -1,4 +1,4 @@
-// This file is part of agertu, popup with information for river
+// This file is part of agertu
 //
 // Copyright (C) 2021 Hugo Machet
 //

@@ -1,4 +1,4 @@
-// This file is part of agertu, popup with information for river
+// This file is part of agertu
 //
 // Copyright (C) 2021 Hugo Machet
 //
@@ -19,14 +19,11 @@ const std = @import("std");
 const wayland = @import("wayland");
 const Context = @import("client.zig").Context;
 
-pub fn main() anyerror!void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    var allocator = &arena.allocator;
+const gpa = std.heap.c_allocator;
 
-    const context = try allocator.create(Context);
+pub fn main() anyerror!void {
+    const context = try gpa.create(Context);
     try context.init();
     try context.loop();
-
     defer context.destroy();
 }

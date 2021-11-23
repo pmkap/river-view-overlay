@@ -1,4 +1,4 @@
-// This file is part of agertu, popup with information for river
+// This file is part of agertu
 //
 // Copyright (C) 2021 Hugo Machet
 //
@@ -31,7 +31,7 @@ const Config = @import("Config.zig");
 const Output = @import("Output.zig");
 
 const gpa = std.heap.c_allocator;
-const log = std.log.scoped(.agertu_client);
+const log = std.log.scoped(.client);
 
 pub const Context = struct {
     const Self = @This();
@@ -212,7 +212,6 @@ fn registryListener(registry: *wl.Registry, event: wl.Registry.Event, self: *Con
                 if (node.data.name == ev.name) {
                     self.outputs.remove(node);
                     node.data.deinit();
-                    gpa.destroy(node);
                     break;
                 }
             }

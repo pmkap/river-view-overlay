@@ -1,4 +1,4 @@
-// This file is part of agertu, popup with information for river
+// This file is part of agertu
 //
 // Copyright (C) 2021 Hugo Machet
 //
@@ -23,17 +23,19 @@ const wl = wayland.client.wl;
 const zwlr = wayland.client.zwlr;
 
 const Buffer = @import("shm.zig").Buffer;
-const Context = @import("ctx.zig").Context;
+const BufferStack = @import("shm.zig").BufferStack;
+const Context = @import("client.zig").Context;
 const Output = @import("Output.zig");
 
 const gpa = std.heap.c_allocator;
-const log = std.log.scoped(.agertu_surface);
+const log = std.log.scoped(.surface);
 
 const Self = @This();
 
 wl_surface: ?*wl.Surface,
 layer_surface: ?*zwlr.LayerSurfaceV1,
-buffers: [2]Buffer = undefined,
+
+buffer_stack: BufferStack(*Buffer) = .{},
 
 width: u32 = 0,
 height: u32 = 0,
@@ -91,9 +93,11 @@ pub fn destroy(self: *Self) void {
     if (self.layer_surface) |layer_surface| layer_surface.destroy();
     if (self.wl_surface) |wl_surface| wl_surface.destroy();
 
-    for (self.buffers) |*buffer, i| {
-        buffer.destroy();
-        log.debug("Buffer {d} destroyed", .{i});
+    while (self.buffer_stack.first) |node| {
+        node.buffer.destroy();
+        self.buffer_stack.remove(node);
+        gpa.destroy(node);
+        log.debug("Buffer destroyed", .{});
     }
 
     gpa.destroy(self);
@@ -122,26 +126,4 @@ fn layerSurfaceListener(
             output.surface = null;
         },
     }
-}
-
-// TODO: Almost sure it doesn't works as intended and not a fan of this function anyway.
-pub fn getNextBuffer(self: *Self, shm: *wl.Shm, width: u32, height: u32) !*Buffer {
-    var i: usize = 0;
-
-    if (!self.buffers[0].busy) {
-        i = 0;
-    } else if (!self.buffers[1].busy) {
-        i = 1;
-    }
-
-    // If the Buffer size does not match the size requested by layer_surface,
-    // destroy it and create a new one.
-    if (self.buffers[i].width != width or self.buffers[i].height != height or
-        self.buffers[i].wl_buffer == null)
-    {
-        self.buffers[i].destroy();
-        self.buffers[i] = try Buffer.create(shm, width, height);
-    }
-
-    return &self.buffers[i];
 }
