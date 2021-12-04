@@ -15,11 +15,9 @@ Feel free to contribute.
 TODO:
 
 -   Fix the timeout working randomly.
--   Memory leaks. The main problem comes from the fact that the font
-    is not destroyed, looks like `font.destroy()` in `output.deinit()`
-    is never called.
-    `invalid read of size` in `timespecDiff()`
--   More idiomatic zig. The point is to easily reuse some files in
+-   Memory leaks. Some `invalid read of size` in `timespecDiff()`
+    and in `Buffer.Create()`
+-   Improve idiomatic zig. The point is to easily reuse some files in
     other Wayland projects, so the base should be clean.
 -   Command line configuration at first and then maybe using a file.
 

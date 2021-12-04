@@ -18,7 +18,6 @@
 const std = @import("std");
 const os = std.os;
 const math = std.math;
-const mem = std.mem;
 const time = std.time;
 
 const fcft = @import("fcft");
@@ -32,6 +31,10 @@ const Output = @import("Output.zig");
 
 const gpa = std.heap.c_allocator;
 const log = std.log.scoped(.client);
+
+/// True when the client can dispatch events. This is set here so it can be
+/// changed by signals handler.
+var initialized: bool = false;
 
 pub const Context = struct {
     const Self = @This();
@@ -50,9 +53,9 @@ pub const Context = struct {
 
     outputs: std.TailQueue(Output) = .{},
 
-    initialized: bool = false,
-
     pub fn init(self: *Self) !void {
+        Signal.init();
+
         if (std.builtin.mode == .Debug) fcft.logInit(.auto, true, .debug);
 
         const display = wl.Display.connect(null) catch {
@@ -99,7 +102,7 @@ pub const Context = struct {
             },
         };
 
-        while (self.initialized) {
+        while (initialized) {
             while ((try self.display.dispatchPending()) > 0) {
                 _ = try self.display.flush();
             }
@@ -149,6 +152,10 @@ pub const Context = struct {
                 _ = try self.display.flush();
             }
         }
+
+        _ = try self.display.flush();
+
+        self.destroy();
     }
 
     fn addOutput(self: *Self, registry: *wl.Registry, name: u32) !void {
@@ -243,10 +250,56 @@ fn callbackListener(callback: *wl.Callback, event: wl.Callback.Event, self: *Con
                 if (!node.data.configured) node.data.getOutputStatus() catch return;
             }
 
-            self.initialized = true;
+            initialized = true;
         },
     }
 }
+
+pub const Signal = struct {
+    fn init() void {
+        var mask = os.empty_sigset;
+        const sigaddset = os.linux.sigaddset;
+
+        sigaddset(&mask, os.SIGTERM);
+        os.sigaction(
+            os.SIGTERM,
+            &os.Sigaction{ .handler = .{ .sigaction = handler }, .mask = mask, .flags = os.SA_SIGINFO },
+            null,
+        );
+
+        sigaddset(&mask, os.SIGINT);
+        os.sigaction(
+            os.SIGINT,
+            &os.Sigaction{ .handler = .{ .sigaction = handler }, .mask = mask, .flags = os.SA_SIGINFO },
+            null,
+        );
+    }
+
+    fn handler(signal: c_int, info: *const os.siginfo_t, data: ?*const c_void) callconv(.C) void {
+        // Reset sigaction to default in case of multiple signals.
+        const sigaction_reset = os.Sigaction{
+            .handler = .{ .sigaction = os.SIG_DFL },
+            .mask = os.empty_sigset,
+            .flags = os.SA_SIGINFO,
+        };
+
+        switch (signal) {
+            os.SIGTERM => {
+                log.warn("Terminated by signal SIGTERM", .{});
+                initialized = false;
+
+                os.sigaction(os.SIGTERM, &sigaction_reset, null);
+            },
+            os.SIGINT => {
+                log.warn("Terminated by signal SIGINT", .{});
+                initialized = false;
+
+                os.sigaction(os.SIGINT, &sigaction_reset, null);
+            },
+            else => {},
+        }
+    }
+};
 
 fn fatal(comptime format: []const u8, args: anytype) noreturn {
     log.err(format, args);

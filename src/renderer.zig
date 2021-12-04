@@ -16,9 +16,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
-const os = std.os;
-const math = std.math;
-const time = std.time;
 
 const fcft = @import("fcft");
 const pixman = @import("pixman");
