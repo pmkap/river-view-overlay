@@ -35,7 +35,7 @@ const Self = @This();
 wl_surface: ?*wl.Surface,
 layer_surface: ?*zwlr.LayerSurfaceV1,
 
-buffer_stack: BufferStack(*Buffer) = .{},
+buffer_stack: BufferStack(Buffer) = .{},
 
 width: u32 = 0,
 height: u32 = 0,

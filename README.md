@@ -16,7 +16,6 @@ TODO:
 
 -   Fix the timeout working randomly.
 -   Memory leaks. Some `invalid read of size` in `timespecDiff()`
-    and in `Buffer.Create()`
 -   Improve idiomatic zig. The point is to easily reuse some files in
     other Wayland projects, so the base should be clean.
 -   Command line configuration at first and then maybe using a file.

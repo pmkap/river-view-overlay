@@ -41,10 +41,7 @@ pub const Buffer = struct {
 
     busy: bool = false,
 
-    pub fn create(shm: *wl.Shm, width: u32, height: u32) !*Self {
-        var buffer = try gpa.create(Buffer);
-        errdefer gpa.destroy(buffer);
-
+    pub fn init(self: *Self, shm: *wl.Shm, width: u32, height: u32) !void {
         // Open a memory backed "file".
         const fd = try os.memfd_create("agertu-shm-buffer-pool", 0);
         defer os.close(fd);
@@ -77,7 +74,7 @@ pub const Buffer = struct {
             wl.Shm.Format.argb8888,
         );
         errdefer wl_buffer.destroy();
-        wl_buffer.setListener(*Self, bufferListener, buffer);
+        wl_buffer.setListener(*Self, bufferListener, self);
 
         // Create the pixman image.
         const pixman_image = pixman.Image.createBitsNoClear(
@@ -90,7 +87,7 @@ pub const Buffer = struct {
         errdefer _ = pixman_image.unref();
 
         // The pixman image and the Wayland buffer now share the same memory.
-        buffer.* = .{
+        self.* = .{
             .wl_buffer = wl_buffer,
             .data = data,
             .pixman_image = pixman_image,
@@ -99,8 +96,6 @@ pub const Buffer = struct {
         };
 
         log.debug("Buffer initialized", .{});
-
-        return buffer;
     }
 
     pub fn destroy(self: *Self) void {

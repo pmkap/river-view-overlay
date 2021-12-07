@@ -104,7 +104,7 @@ fn notBusyFilter(buffer: *Buffer, context: void) bool {
 pub fn getNextBuffer(self: *Self) !*Buffer {
     const surface = self.surface.?;
     var ret: ?*Buffer = null;
-    var it = BufferStack(*Buffer).iter(surface.buffer_stack.first, .forward, {}, notBusyFilter);
+    var it = BufferStack(Buffer).iter(surface.buffer_stack.first, .forward, {}, notBusyFilter);
     while (it.next()) |buf| {
         if (buf.width != surface.width or buf.height != surface.height or
             buf.wl_buffer == null)
@@ -118,10 +118,10 @@ pub fn getNextBuffer(self: *Self) !*Buffer {
 
     if (ret == null) {
         log.debug("No Buffer available, creating one", .{});
-        const new_buffer_node = try gpa.create(BufferStack(*Buffer).Node);
-        ret = try Buffer.create(self.ctx.shm.?, surface.width, surface.height);
-        new_buffer_node.buffer = ret.?;
+        const new_buffer_node = try gpa.create(BufferStack(Buffer).Node);
+        try new_buffer_node.buffer.init(self.ctx.shm.?, surface.width, surface.height);
         surface.buffer_stack.append(new_buffer_node);
+        ret = &new_buffer_node.buffer;
     }
 
     return ret.?;
