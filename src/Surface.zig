@@ -72,8 +72,8 @@ pub fn init(self: *Self, output: *Output) !void {
         layer.setListener(*Output, layerSurfaceListener, output);
         layer.setSize(self.width, self.height);
         // TODO: Set it in Config.zig
-        layer.setAnchor(.{ .top = true, .left = false, .bottom = false, .right = true });
-        layer.setMargin(10, 10, 0, 0);
+        layer.setAnchor(.{ .top = false, .left = false, .bottom = true, .right = true });
+        layer.setMargin(0, 10, 10, 0);
     }
 
     // Create an empty region so the compositor knows that the surface is not
