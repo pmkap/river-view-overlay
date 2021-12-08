@@ -68,7 +68,6 @@ pub fn init(self: *Self, ctx: *Context, output: *wl.Output, name: u32) !void {
 
 pub fn deinit(self: *Self) void {
     if (self.surface) |surface| surface.destroy();
-
     self.font.destroy();
     self.river_output_status.destroy();
     self.wl_output.release();
@@ -97,10 +96,13 @@ pub fn updateSurface(self: *Self) !void {
     }
 }
 
+/// Return true if Buffer is not busy.
 fn notBusyFilter(buffer: *Buffer, context: void) bool {
     return buffer.busy == false;
 }
 
+/// Return the next Buffer not busy or create a new one if none
+/// are available.
 pub fn getNextBuffer(self: *Self) !*Buffer {
     const surface = self.surface.?;
     var ret: ?*Buffer = null;
@@ -176,7 +178,7 @@ pub fn renderFrame(self: *Self) !void {
 
     var now: os.timespec = undefined;
     os.clock_gettime(os.CLOCK_MONOTONIC, &now) catch @panic("CLOCK_MONOTONIC not supported");
-    surface.last_frame = &now;
+    surface.last_frame = now;
 
     surface.wl_surface.?.commit();
 }

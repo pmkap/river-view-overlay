@@ -76,10 +76,7 @@ pub const Context = struct {
     }
 
     pub fn destroy(self: *Self) void {
-        var it = self.outputs.first;
-        while (it) |node| : (it = node.next) {
-            node.data.deinit();
-        }
+        while (self.outputs.pop()) |node| node.data.deinit();
 
         if (self.compositor) |compositor| compositor.destroy();
         if (self.shm) |shm| shm.destroy();
@@ -92,7 +89,6 @@ pub const Context = struct {
 
     pub fn loop(self: *Self) !void {
         var timeout: i64 = -1;
-        var start_time: os.timespec = undefined;
         var when: os.timespec = undefined;
         var fds = [1]os.pollfd{
             .{
@@ -107,17 +103,17 @@ pub const Context = struct {
                 _ = try self.display.flush();
             }
 
-            os.clock_gettime(os.CLOCK_MONOTONIC, &start_time) catch @panic("CLOCK_MONOTONIC not supported");
-
             var it = self.outputs.first;
             while (it) |node| : (it = node.next) {
                 const output = &node.data;
                 if (output.surface) |surface| {
                     if (!surface.configured) continue;
-                    when = timespecDiff(&start_time, surface.last_frame);
-                } else continue;
 
-                log.debug("start: {d}\nwhen: {d}", .{ start_time, when });
+                    var now: os.timespec = undefined;
+                    os.clock_gettime(os.CLOCK_MONOTONIC, &now) catch @panic("CLOCK_MONOTONIC not supported");
+
+                    timespecDiff(&now, &surface.last_frame, &when);
+                } else continue;
 
                 const half_second_ns: i64 = 500_000_000; // 0.5 second in nanosecond
 
@@ -130,14 +126,10 @@ pub const Context = struct {
                     timeout = blk: {
                         // ns to ms
                         var _timeout = @divFloor((half_second_ns - when.tv_nsec), time.ns_per_ms);
-                        log.debug("_timeout: {d}", .{_timeout});
-
                         if (timeout == -1 or timeout > _timeout) break :blk @intCast(i32, _timeout);
-
                         break :blk timeout;
                     };
                 }
-                log.debug("timeout: {d}", .{timeout});
             }
 
             _ = try self.display.flush();
@@ -171,90 +163,81 @@ pub const Context = struct {
             try node.data.getOutputStatus();
         }
     }
-};
 
-fn timespecDiff(ts1: *const os.timespec, ts2: *const os.timespec) os.timespec {
-    return blk: {
-        if ((ts1.tv_nsec - ts2.tv_nsec) < 0) { // Invalid read of size 8
-            break :blk .{
+    fn registryListener(registry: *wl.Registry, event: wl.Registry.Event, self: *Context) void {
+        switch (event) {
+            .global => |global| {
+                if (std.cstr.cmp(global.interface, wl.Compositor.getInterface().name) == 0) {
+                    self.compositor = registry.bind(global.name, wl.Compositor, 4) catch return;
+                } else if (std.cstr.cmp(global.interface, wl.Shm.getInterface().name) == 0) {
+                    self.shm = registry.bind(global.name, wl.Shm, 1) catch return;
+                } else if (std.cstr.cmp(global.interface, wl.Output.getInterface().name) == 0) {
+                    self.addOutput(registry, global.name) catch |err| {
+                        fatal("Failed to bind output: {}", .{err});
+                    };
+                } else if (std.cstr.cmp(global.interface, zwlr.LayerShellV1.getInterface().name) == 0) {
+                    self.layer_shell = registry.bind(global.name, zwlr.LayerShellV1, 4) catch return;
+                } else if (std.cstr.cmp(global.interface, zriver.StatusManagerV1.getInterface().name) == 0) {
+                    self.river_status_manager = registry.bind(global.name, zriver.StatusManagerV1, 2) catch return;
+                }
+            },
+            .global_remove => |ev| {
+                var it = self.outputs.first;
+                while (it) |node| : (it = node.next) {
+                    const output = &node.data;
+                    if (output.name == ev.name) {
+                        self.outputs.remove(node);
+                        output.deinit();
+                        break;
+                    }
+                }
+            },
+        }
+    }
+
+    fn callbackListener(callback: *wl.Callback, event: wl.Callback.Event, self: *Context) void {
+        switch (event) {
+            .done => {
+                callback.destroy();
+                self.callback_sync = null;
+
+                if (self.compositor == null) {
+                    fatal("Wayland compositor does not support wl_compositor\n", .{});
+                }
+                if (self.shm == null) {
+                    fatal("Wayland compositor does not support wl_shm\n", .{});
+                }
+                if (self.layer_shell == null) {
+                    fatal("Wayland compositor does not support layer_shell\n", .{});
+                }
+                if (self.river_status_manager == null) {
+                    fatal("Wayland compositor does not support river_status_v1.\n", .{});
+                }
+
+                var it = self.outputs.first;
+                while (it) |node| : (it = node.next) {
+                    if (!node.data.configured) node.data.getOutputStatus() catch return;
+                }
+
+                initialized = true;
+            },
+        }
+    }
+
+    fn timespecDiff(ts1: *const os.timespec, ts2: *const os.timespec, result: *os.timespec) void {
+        if ((ts1.tv_nsec - ts2.tv_nsec) < 0) {
+            result.* = .{
                 .tv_sec = (ts1.tv_sec - ts2.tv_sec) - 1,
                 .tv_nsec = (ts1.tv_nsec - ts2.tv_nsec) + time.ns_per_s,
             };
-        }
-        break :blk .{
-            .tv_sec = ts1.tv_sec - ts2.tv_sec, // Invalid read of size 8
-            .tv_nsec = ts1.tv_nsec - ts2.tv_nsec, // Invalid read of size 8
+        } else result.* = .{
+            .tv_sec = ts1.tv_sec - ts2.tv_sec,
+            .tv_nsec = ts1.tv_nsec - ts2.tv_nsec,
         };
-    };
-}
-
-fn timespecToNs(ts: *const os.timespec) i64 {
-    return math.add(
-        i64,
-        math.mul(i64, ts.tv_sec, time.ns_per_s) catch math.maxInt(i64),
-        ts.tv_nsec,
-    ) catch math.maxInt(i64);
-}
-
-fn registryListener(registry: *wl.Registry, event: wl.Registry.Event, self: *Context) void {
-    switch (event) {
-        .global => |global| {
-            if (std.cstr.cmp(global.interface, wl.Compositor.getInterface().name) == 0) {
-                self.compositor = registry.bind(global.name, wl.Compositor, 4) catch return;
-            } else if (std.cstr.cmp(global.interface, wl.Shm.getInterface().name) == 0) {
-                self.shm = registry.bind(global.name, wl.Shm, 1) catch return;
-            } else if (std.cstr.cmp(global.interface, wl.Output.getInterface().name) == 0) {
-                self.addOutput(registry, global.name) catch |err| {
-                    fatal("Failed to bind output: {}", .{err});
-                };
-            } else if (std.cstr.cmp(global.interface, zwlr.LayerShellV1.getInterface().name) == 0) {
-                self.layer_shell = registry.bind(global.name, zwlr.LayerShellV1, 4) catch return;
-            } else if (std.cstr.cmp(global.interface, zriver.StatusManagerV1.getInterface().name) == 0) {
-                self.river_status_manager = registry.bind(global.name, zriver.StatusManagerV1, 2) catch return;
-            }
-        },
-        .global_remove => |ev| {
-            var it = self.outputs.first;
-            while (it) |node| : (it = node.next) {
-                if (node.data.name == ev.name) {
-                    self.outputs.remove(node);
-                    node.data.deinit();
-                    break;
-                }
-            }
-        },
     }
-}
+};
 
-fn callbackListener(callback: *wl.Callback, event: wl.Callback.Event, self: *Context) void {
-    switch (event) {
-        .done => {
-            callback.destroy();
-            self.callback_sync = null;
-
-            if (self.compositor == null) {
-                fatal("Wayland compositor does not support wl_compositor\n", .{});
-            }
-            if (self.shm == null) {
-                fatal("Wayland compositor does not support wl_shm\n", .{});
-            }
-            if (self.layer_shell == null) {
-                fatal("Wayland compositor does not support layer_shell\n", .{});
-            }
-            if (self.river_status_manager == null) {
-                fatal("Wayland compositor does not support river_status_v1.\n", .{});
-            }
-
-            var it = self.outputs.first;
-            while (it) |node| : (it = node.next) {
-                if (!node.data.configured) node.data.getOutputStatus() catch return;
-            }
-
-            initialized = true;
-        },
-    }
-}
-
+// POSIX signal handling.
 pub const Signal = struct {
     fn init() void {
         var mask = os.empty_sigset;
@@ -311,9 +294,9 @@ test "timespec functions" {
     const ts_a: os.timespec = .{ .tv_sec = 2, .tv_nsec = 500 };
     const ts_b: os.timespec = .{ .tv_sec = 3, .tv_nsec = 0 };
     var ts_c: os.timespec = undefined;
-    ts_c = timespecDiff(&ts_b, &ts_a);
-    const ns = timespecToNs(&ts_c);
+    timespecDiff(&ts_b, &ts_a, &ts_c);
 
     // 3s - (2s + 500ns) = 999999500ns
-    try testing.expect(ns == 999_999_500);
+    try testing.expect(ts_c.tv_sec == 0);
+    try testing.expect(ts_c.tv_nsec == 999999500);
 }

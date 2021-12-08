@@ -40,8 +40,8 @@ buffer_stack: BufferStack(Buffer) = .{},
 width: u32 = 0,
 height: u32 = 0,
 
-/// Time when the wl_suurface is commited.
-last_frame: *os.timespec = undefined,
+/// Time when the wl_surface is commited.
+last_frame: os.timespec = undefined,
 
 /// True once the layer_surface received the configure event.
 configured: bool = false,
