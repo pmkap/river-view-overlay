@@ -170,6 +170,20 @@ pub fn BufferStack(comptime T: type) type {
             }
         }
 
+        /// Remove and return the last node in the list.
+        pub fn pop(self: *Self) ?*Node {
+            const last = self.last orelse return null;
+            self.remove(last);
+            return last;
+        }
+
+        /// Remove and return the first node in the list.
+        pub fn popFirst(self: *Self) ?*Node {
+            const first = self.first orelse return null;
+            self.remove(first);
+            return first;
+        }
+
         const Direction = enum {
             forward,
             reverse,
@@ -209,7 +223,7 @@ pub fn BufferStack(comptime T: type) type {
     };
 }
 
-test "append/remove (*Buffer)" {
+test "append/remove/pop (*Buffer)" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
@@ -324,6 +338,17 @@ test "append/remove (*Buffer)" {
 
         try testing.expect(buffers.first == one);
         try testing.expect(buffers.last == four);
+    }
+
+    // Pop
+    {
+        var buf = buffers.pop();
+        try testing.expect(buf == four);
+        try testing.expect(buffers.last == three);
+
+        buf = buffers.popFirst();
+        try testing.expect(buf == one);
+        try testing.expect(buffers.first == five);
     }
 
     // Clear

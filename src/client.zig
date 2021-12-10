@@ -294,7 +294,7 @@ test "timespec functions" {
     const ts_a: os.timespec = .{ .tv_sec = 2, .tv_nsec = 500 };
     const ts_b: os.timespec = .{ .tv_sec = 3, .tv_nsec = 0 };
     var ts_c: os.timespec = undefined;
-    timespecDiff(&ts_b, &ts_a, &ts_c);
+    Context.timespecDiff(&ts_b, &ts_a, &ts_c);
 
     // 3s - (2s + 500ns) = 999999500ns
     try testing.expect(ts_c.tv_sec == 0);
