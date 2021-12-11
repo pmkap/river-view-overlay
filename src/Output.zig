@@ -268,6 +268,7 @@ fn handleFocusedTags(self: *Self, tags: u32) void {
 }
 
 fn handleViewTags(self: *Self, tags: *wl.Array) void {
+    self.view_tags = 0;
     for (tags.slice(u32)) |tag| {
         self.view_tags |= tag;
     }
