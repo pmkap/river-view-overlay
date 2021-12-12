@@ -39,8 +39,13 @@ const Self = @This();
 // Surface
 surface_borders_size: u16 = 0,
 
-surface_color_background: pixman.Color = try parseRgba("0x202325"),
-surface_color_borders: pixman.Color = try parseRgba("0x9e2f59"),
+surface_color_background: []const u8 = "0x202325",
+surface_color_borders: []const u8 = "0x9e2f59",
+
+// Layer surface
+// <top>:<right>:<bottom>:<left>
+layer_anchors: []const u8 = "1:1:0:0",
+layer_margins: []const u8 = "10:10:0:0",
 
 // Tags
 tags_amount: u32 = 9,

@@ -96,8 +96,7 @@ pub fn renderBytes(
     image: *pixman.Image,
     bytes: []const u8,
     font: *fcft.Font,
-    foreground: *const pixman.Color,
-    surface_borders_size: u32,
+    foreground: []const u8,
     x_start: i32,
     y_start: i32,
 ) !void {

@@ -34,7 +34,7 @@ const renderer = @import("renderer.zig");
 const gpa = std.heap.c_allocator;
 const log = std.log.scoped(.output);
 
-const Self = @This();
+const Output = @This();
 
 wl_output: *wl.Output,
 name: u32,
@@ -52,59 +52,59 @@ urgent_tags: u32 = 0,
 
 configured: bool = false,
 
-pub fn init(self: *Self, ctx: *Context, output: *wl.Output, name: u32) !void {
+pub fn init(output: *Output, ctx: *Context, wl_output: *wl.Output, name: u32) !void {
     // TODO: Should be configurable in Config.zig.
     var font_names = [_][*:0]const u8{"monospace:size=18"};
     const font = try fcft.Font.fromName(font_names[0..], null);
     errdefer font.destroy();
 
-    self.* = .{
-        .wl_output = output,
+    output.* = .{
+        .wl_output = wl_output,
         .name = name,
         .ctx = ctx,
         .font = font,
     };
 }
 
-pub fn deinit(self: *Self) void {
-    if (self.surface) |surface| surface.destroy();
-    self.font.destroy();
-    self.river_output_status.destroy();
-    self.wl_output.release();
+pub fn deinit(output: *Output) void {
+    if (output.surface) |surface| surface.destroy();
+    output.font.destroy();
+    output.river_output_status.destroy();
+    output.wl_output.release();
 
-    const node = @fieldParentPtr(std.TailQueue(Self).Node, "data", self);
+    const node = @fieldParentPtr(std.TailQueue(Output).Node, "data", output);
     gpa.destroy(node);
 }
 
-pub fn getOutputStatus(self: *Self) !void {
-    self.river_output_status = try self.ctx.river_status_manager.?.getRiverOutputStatus(self.wl_output);
-    self.river_output_status.setListener(*Self, outputStatuslistener, self);
-    self.configured = true;
+pub fn getOutputStatus(output: *Output) !void {
+    output.river_output_status = try output.ctx.river_status_manager.?.getRiverOutputStatus(output.wl_output);
+    output.river_output_status.setListener(*Output, outputStatuslistener, output);
+    output.configured = true;
 }
 
 /// If a surface alreadu exists use it, else initialize a new one.
-pub fn updateSurface(self: *Self) !void {
-    if (self.surface) |surface| {
+pub fn updateSurface(output: *Output) !void {
+    if (output.surface) |surface| {
         log.debug("Surface found, using it", .{});
-        try self.renderFrame();
+        try output.renderFrame();
     } else {
         log.debug("No Surface found, creating one", .{});
         const surface = try gpa.create(Surface);
         errdefer gpa.destroy(surface);
-        self.surface = surface;
-        try self.surface.?.init(self);
+        output.surface = surface;
+        try output.surface.?.init(output);
     }
 }
 
 /// Return true if Buffer is not busy.
 fn notBusyFilter(buffer: *Buffer, context: void) bool {
-    return buffer.busy == false;
+    return !buffer.busy;
 }
 
 /// Return the next Buffer not busy or create a new one if none
 /// are available.
-pub fn getNextBuffer(self: *Self) !*Buffer {
-    const surface = self.surface.?;
+pub fn getNextBuffer(output: *Output) !*Buffer {
+    const surface = output.surface.?;
     var ret: ?*Buffer = null;
     var it = BufferStack(Buffer).iter(surface.buffer_stack.first, .forward, {}, notBusyFilter);
     while (it.next()) |buf| {
@@ -121,7 +121,7 @@ pub fn getNextBuffer(self: *Self) !*Buffer {
     if (ret == null) {
         log.debug("No Buffer available, creating one", .{});
         const new_buffer_node = try gpa.create(BufferStack(Buffer).Node);
-        try new_buffer_node.buffer.init(self.ctx.shm.?, surface.width, surface.height);
+        try new_buffer_node.buffer.init(output.ctx.shm.?, surface.width, surface.height);
         surface.buffer_stack.append(new_buffer_node);
         ret = &new_buffer_node.buffer;
     }
@@ -130,15 +130,15 @@ pub fn getNextBuffer(self: *Self) !*Buffer {
 }
 
 /// Draw and commit a frame.
-pub fn renderFrame(self: *Self) !void {
-    const config = self.ctx.config;
-    const surface = self.surface.?;
+pub fn renderFrame(output: *Output) !void {
+    const config = output.ctx.config;
+    const surface = output.surface.?;
     if (!surface.configured) {
         log.debug("Surface is not configured.", .{});
         return;
     }
 
-    const buffer = try self.getNextBuffer();
+    const buffer = try output.getNextBuffer();
     const image = buffer.pixman_image orelse return;
 
     // Now the surface is configured and has a buffer, we can safely draw on it.
@@ -152,12 +152,12 @@ pub fn renderFrame(self: *Self) !void {
         @intCast(u16, buffer.width),
         @intCast(u16, buffer.height),
         config.surface_borders_size,
-        &config.surface_color_background,
-        &config.surface_color_borders,
+        config.surface_color_background,
+        config.surface_color_borders,
     );
 
     // Render the tags square.
-    try self.renderTags(
+    try output.renderTags(
         image,
         config.tags_square_size,
         config.tags_borders_size,
@@ -186,33 +186,33 @@ pub fn renderFrame(self: *Self) !void {
 /// Render a bordered square for each tags with or without a number
 /// text inside it.
 fn renderTags(
-    self: *Self,
+    output: *Output,
     image: *pixman.Image,
     square_size: u16,
     borders_size: u16,
     margins: u16,
 ) !void {
-    const config = self.ctx.config;
+    const config = output.ctx.config;
 
     var i: u32 = 0;
     while (i < config.tags_amount) : (i += 1) {
         // Tags state.
-        const focused = if ((self.focused_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
-        const urgent = if ((self.urgent_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
-        const occupied = if ((self.view_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
+        const focused = if ((output.focused_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
+        const urgent = if ((output.urgent_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
+        const occupied = if ((output.view_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
 
         const tag_background_color = blk: {
-            if (focused) break :blk &config.tags_color_focused;
-            if (urgent) break :blk &config.tags_color_urgent;
-            if (occupied) break :blk &config.tags_color_occupied;
-            break :blk &config.tags_color_background;
+            if (focused) break :blk config.tags_color_focused;
+            if (urgent) break :blk config.tags_color_urgent;
+            if (occupied) break :blk config.tags_color_occupied;
+            break :blk config.tags_color_background;
         };
 
         const tag_borders_color = blk: {
-            if (focused) break :blk &config.tags_color_borders_focused;
-            if (urgent) break :blk &config.tags_color_borders_urgent;
-            if (occupied) break :blk &config.tags_color_borders_occupied;
-            break :blk &config.tags_color_borders;
+            if (focused) break :blk config.tags_color_borders_focused;
+            if (urgent) break :blk config.tags_color_borders_urgent;
+            if (occupied) break :blk config.tags_color_borders_occupied;
+            break :blk config.tags_color_borders;
         };
 
         // Total size of a tag.
@@ -241,20 +241,19 @@ fn renderTags(
             const y_text: i16 = @intCast(i16, config.surface_borders_size + tag_width / 2);
 
             const foreground = blk: {
-                if (focused) break :blk &config.tags_color_foreground_focused;
-                if (urgent) break :blk &config.tags_color_foreground_urgent;
-                if (occupied) break :blk &config.tags_color_foreground_occupied;
-                break :blk &config.tags_color_foreground;
+                if (focused) break :blk config.tags_color_foreground_focused;
+                if (urgent) break :blk config.tags_color_foreground_urgent;
+                if (occupied) break :blk config.tags_color_foreground_occupied;
+                break :blk config.tags_color_foreground;
             };
 
             var buf: [2]u8 = undefined;
-            var tag_number = try std.fmt.bufPrint(&buf, "{}", .{i + 1});
+            var tag_number = try fmt.bufPrint(&buf, "{}", .{i + 1});
             try renderer.renderBytes(
                 image,
                 tag_number,
-                self.font,
+                output.font,
                 foreground,
-                borders_size,
                 x_text,
                 y_text,
             );
@@ -262,33 +261,33 @@ fn renderTags(
     }
 }
 
-fn handleFocusedTags(self: *Self, tags: u32) void {
-    self.focused_tags = tags;
-    self.updateSurface() catch return;
+fn handleFocusedTags(output: *Output, tags: u32) void {
+    output.focused_tags = tags;
+    output.updateSurface() catch return;
 }
 
-fn handleViewTags(self: *Self, tags: *wl.Array) void {
-    self.view_tags = 0;
+fn handleViewTags(output: *Output, tags: *wl.Array) void {
+    output.view_tags = 0;
     for (tags.slice(u32)) |tag| {
-        self.view_tags |= tag;
+        output.view_tags |= tag;
     }
     // Only update if the Surface already exists.
-    if (self.surface != null) self.updateSurface() catch return;
+    if (output.surface != null) output.updateSurface() catch return;
 }
 
-fn handleUrgentTags(self: *Self, tags: u32) void {
-    self.urgent_tags = tags;
-    self.updateSurface() catch return;
+fn handleUrgentTags(output: *Output, tags: u32) void {
+    output.urgent_tags = tags;
+    output.updateSurface() catch return;
 }
 
 fn outputStatuslistener(
     river_output_status: *zriver.OutputStatusV1,
     event: zriver.OutputStatusV1.Event,
-    self: *Self,
+    output: *Output,
 ) void {
     switch (event) {
-        .focused_tags => |ev| self.handleFocusedTags(ev.tags),
-        .view_tags => |ev| self.handleViewTags(ev.tags),
-        .urgent_tags => |ev| self.handleUrgentTags(ev.tags),
+        .focused_tags => |ev| output.handleFocusedTags(ev.tags),
+        .view_tags => |ev| output.handleViewTags(ev.tags),
+        .urgent_tags => |ev| output.handleUrgentTags(ev.tags),
     }
 }

@@ -17,7 +17,6 @@
 
 const std = @import("std");
 const os = std.os;
-const math = std.math;
 const time = std.time;
 
 const fcft = @import("fcft");
@@ -37,8 +36,6 @@ const log = std.log.scoped(.client);
 var initialized: bool = false;
 
 pub const Context = struct {
-    const Self = @This();
-
     display: *wl.Display,
     registry: *wl.Registry,
     callback_sync: ?*wl.Callback = null,
@@ -49,11 +46,11 @@ pub const Context = struct {
     layer_shell: ?*zwlr.LayerShellV1 = null,
     river_status_manager: ?*zriver.StatusManagerV1 = null,
 
-    config: Config = .{},
-
     outputs: std.TailQueue(Output) = .{},
 
-    pub fn init(self: *Self) !void {
+    config: Config = .{},
+
+    pub fn init(ctx: *Context) !void {
         Signal.init();
 
         if (std.builtin.mode == .Debug) fcft.logInit(.auto, true, .debug);
@@ -63,47 +60,47 @@ pub const Context = struct {
             std.os.exit(1);
         };
 
-        self.* = .{
+        ctx.* = .{
             .display = display,
             .registry = try display.getRegistry(),
             .callback_sync = try display.sync(),
         };
 
-        self.registry.setListener(*Self, registryListener, self);
-        self.callback_sync.?.setListener(*Self, callbackListener, self);
+        ctx.registry.setListener(*Context, registryListener, ctx);
+        ctx.callback_sync.?.setListener(*Context, callbackListener, ctx);
 
-        _ = try self.display.roundtrip();
+        _ = try ctx.display.roundtrip();
     }
 
-    pub fn destroy(self: *Self) void {
-        while (self.outputs.pop()) |node| node.data.deinit();
+    pub fn destroy(ctx: *Context) void {
+        while (ctx.outputs.pop()) |node| node.data.deinit();
 
-        if (self.compositor) |compositor| compositor.destroy();
-        if (self.shm) |shm| shm.destroy();
-        if (self.layer_shell) |layer_shell| layer_shell.destroy();
-        if (self.river_status_manager) |manager| manager.destroy();
+        if (ctx.compositor) |compositor| compositor.destroy();
+        if (ctx.shm) |shm| shm.destroy();
+        if (ctx.layer_shell) |layer_shell| layer_shell.destroy();
+        if (ctx.river_status_manager) |manager| manager.destroy();
 
-        self.registry.destroy();
-        self.display.disconnect();
+        ctx.registry.destroy();
+        ctx.display.disconnect();
     }
 
-    pub fn loop(self: *Self) !void {
+    pub fn loop(ctx: *Context) !void {
         var timeout: i64 = -1;
         var when: os.timespec = undefined;
         var fds = [1]os.pollfd{
             .{
-                .fd = self.display.getFd(),
+                .fd = ctx.display.getFd(),
                 .events = os.POLLIN,
                 .revents = undefined,
             },
         };
 
         while (initialized) {
-            while ((try self.display.dispatchPending()) > 0) {
-                _ = try self.display.flush();
+            while ((try ctx.display.dispatchPending()) > 0) {
+                _ = try ctx.display.flush();
             }
 
-            var it = self.outputs.first;
+            var it = ctx.outputs.first;
             while (it) |node| : (it = node.next) {
                 const output = &node.data;
                 if (output.surface) |surface| {
@@ -132,61 +129,61 @@ pub const Context = struct {
                 }
             }
 
-            _ = try self.display.flush();
+            _ = try ctx.display.flush();
 
             _ = try os.poll(&fds, @intCast(i32, timeout));
 
             if ((fds[0].revents & os.POLLIN) != 0) {
-                _ = try self.display.dispatch();
+                _ = try ctx.display.dispatch();
             }
 
             if ((fds[0].revents & os.POLLOUT) != 0) {
-                _ = try self.display.flush();
+                _ = try ctx.display.flush();
             }
         }
 
-        _ = try self.display.flush();
+        _ = try ctx.display.flush();
 
-        self.destroy();
+        ctx.destroy();
     }
 
-    fn addOutput(self: *Self, registry: *wl.Registry, name: u32) !void {
+    fn addOutput(ctx: *Context, registry: *wl.Registry, name: u32) !void {
         const wl_output = try registry.bind(name, wl.Output, 3);
         errdefer wl_output.release();
 
         const node = try gpa.create(std.TailQueue(Output).Node);
         errdefer gpa.destroy(node);
-        try node.data.init(self, wl_output, name);
-        self.outputs.append(node);
+        try node.data.init(ctx, wl_output, name);
+        ctx.outputs.append(node);
 
-        if (self.river_status_manager) |manager| {
+        if (ctx.river_status_manager) |_| {
             try node.data.getOutputStatus();
         }
     }
 
-    fn registryListener(registry: *wl.Registry, event: wl.Registry.Event, self: *Context) void {
+    fn registryListener(registry: *wl.Registry, event: wl.Registry.Event, ctx: *Context) void {
         switch (event) {
             .global => |global| {
                 if (std.cstr.cmp(global.interface, wl.Compositor.getInterface().name) == 0) {
-                    self.compositor = registry.bind(global.name, wl.Compositor, 4) catch return;
+                    ctx.compositor = registry.bind(global.name, wl.Compositor, 4) catch return;
                 } else if (std.cstr.cmp(global.interface, wl.Shm.getInterface().name) == 0) {
-                    self.shm = registry.bind(global.name, wl.Shm, 1) catch return;
+                    ctx.shm = registry.bind(global.name, wl.Shm, 1) catch return;
                 } else if (std.cstr.cmp(global.interface, wl.Output.getInterface().name) == 0) {
-                    self.addOutput(registry, global.name) catch |err| {
+                    ctx.addOutput(registry, global.name) catch |err| {
                         fatal("Failed to bind output: {}", .{err});
                     };
                 } else if (std.cstr.cmp(global.interface, zwlr.LayerShellV1.getInterface().name) == 0) {
-                    self.layer_shell = registry.bind(global.name, zwlr.LayerShellV1, 4) catch return;
+                    ctx.layer_shell = registry.bind(global.name, zwlr.LayerShellV1, 4) catch return;
                 } else if (std.cstr.cmp(global.interface, zriver.StatusManagerV1.getInterface().name) == 0) {
-                    self.river_status_manager = registry.bind(global.name, zriver.StatusManagerV1, 2) catch return;
+                    ctx.river_status_manager = registry.bind(global.name, zriver.StatusManagerV1, 2) catch return;
                 }
             },
             .global_remove => |ev| {
-                var it = self.outputs.first;
+                var it = ctx.outputs.first;
                 while (it) |node| : (it = node.next) {
                     const output = &node.data;
                     if (output.name == ev.name) {
-                        self.outputs.remove(node);
+                        ctx.outputs.remove(node);
                         output.deinit();
                         break;
                     }
@@ -195,28 +192,29 @@ pub const Context = struct {
         }
     }
 
-    fn callbackListener(callback: *wl.Callback, event: wl.Callback.Event, self: *Context) void {
+    fn callbackListener(callback: *wl.Callback, event: wl.Callback.Event, ctx: *Context) void {
         switch (event) {
             .done => {
                 callback.destroy();
-                self.callback_sync = null;
+                ctx.callback_sync = null;
 
-                if (self.compositor == null) {
+                if (ctx.compositor == null) {
                     fatal("Wayland compositor does not support wl_compositor\n", .{});
                 }
-                if (self.shm == null) {
+                if (ctx.shm == null) {
                     fatal("Wayland compositor does not support wl_shm\n", .{});
                 }
-                if (self.layer_shell == null) {
+                if (ctx.layer_shell == null) {
                     fatal("Wayland compositor does not support layer_shell\n", .{});
                 }
-                if (self.river_status_manager == null) {
+                if (ctx.river_status_manager == null) {
                     fatal("Wayland compositor does not support river_status_v1.\n", .{});
                 }
 
-                var it = self.outputs.first;
+                var it = ctx.outputs.first;
                 while (it) |node| : (it = node.next) {
-                    if (!node.data.configured) node.data.getOutputStatus() catch return;
+                    const output = &node.data;
+                    if (!output.configured) output.getOutputStatus() catch return;
                 }
 
                 initialized = true;
@@ -237,7 +235,7 @@ pub const Context = struct {
     }
 };
 
-// POSIX signal handling.
+/// POSIX signal handling.
 pub const Signal = struct {
     fn init() void {
         var mask = os.empty_sigset;
@@ -286,7 +284,7 @@ pub const Signal = struct {
 
 fn fatal(comptime format: []const u8, args: anytype) noreturn {
     log.err(format, args);
-    std.os.exit(1);
+    os.exit(1);
 }
 
 test "timespec functions" {

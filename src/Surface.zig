@@ -30,7 +30,7 @@ const Output = @import("Output.zig");
 const gpa = std.heap.c_allocator;
 const log = std.log.scoped(.surface);
 
-const Self = @This();
+const Surface = @This();
 
 wl_surface: ?*wl.Surface,
 layer_surface: ?*zwlr.LayerSurfaceV1,
@@ -46,7 +46,7 @@ last_frame: os.timespec = undefined,
 /// True once the layer_surface received the configure event.
 configured: bool = false,
 
-pub fn init(self: *Self, output: *Output) !void {
+pub fn init(surface: *Surface, output: *Output) !void {
     const config = output.ctx.config;
 
     const wl_surface = try output.ctx.compositor.?.createSurface();
@@ -57,7 +57,7 @@ pub fn init(self: *Self, output: *Output) !void {
         "agertu",
     );
 
-    self.* = .{
+    surface.* = .{
         .wl_surface = wl_surface,
         .layer_surface = layer_surface,
         .width = config.tags_amount * config.tags_square_size +
@@ -68,39 +68,39 @@ pub fn init(self: *Self, output: *Output) !void {
     };
 
     // Configure the layer_surface.
-    if (self.layer_surface) |layer| {
+    if (surface.layer_surface) |layer| {
         layer.setListener(*Output, layerSurfaceListener, output);
-        layer.setSize(self.width, self.height);
-        // TODO: Set it in Config.zig
-        layer.setAnchor(.{ .top = false, .left = false, .bottom = true, .right = true });
-        layer.setMargin(0, 10, 10, 0);
+        layer.setSize(surface.width, surface.height);
+        layer.setAnchor(try parseAnchors(config.layer_anchors));
+        const margins = try parseMargins(config.layer_margins);
+        layer.setMargin(margins[0], margins[1], margins[2], margins[3]);
     }
 
     // Create an empty region so the compositor knows that the surface is not
     // interested in pointer events.
     const region = try output.ctx.compositor.?.createRegion();
-    self.wl_surface.?.setInputRegion(region);
+    surface.wl_surface.?.setInputRegion(region);
     region.destroy();
 
     // We need to commit the empty surface first so we can receive a configure event
     // with width and height requested for our surface.
-    self.wl_surface.?.commit();
+    surface.wl_surface.?.commit();
 
     log.debug("New Surface initialized", .{});
 }
 
-pub fn destroy(self: *Self) void {
-    if (self.layer_surface) |layer_surface| layer_surface.destroy();
-    if (self.wl_surface) |wl_surface| wl_surface.destroy();
+pub fn destroy(surface: *Surface) void {
+    if (surface.layer_surface) |layer_surface| layer_surface.destroy();
+    if (surface.wl_surface) |wl_surface| wl_surface.destroy();
 
-    while (self.buffer_stack.first) |node| {
+    while (surface.buffer_stack.first) |node| {
         node.buffer.destroy();
-        self.buffer_stack.remove(node);
+        surface.buffer_stack.remove(node);
         gpa.destroy(node);
         log.debug("Buffer destroyed", .{});
     }
 
-    gpa.destroy(self);
+    gpa.destroy(surface);
     log.debug("Surface destroyed", .{});
 }
 

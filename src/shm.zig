@@ -30,8 +30,6 @@ const gpa = std.heap.c_allocator;
 const log = std.log.scoped(.shm);
 
 pub const Buffer = struct {
-    const Self = @This();
-
     wl_buffer: ?*wl.Buffer,
     data: []align(mem.page_size) u8,
     pixman_image: ?*pixman.Image,
@@ -41,7 +39,7 @@ pub const Buffer = struct {
 
     busy: bool = false,
 
-    pub fn init(self: *Self, shm: *wl.Shm, width: u32, height: u32) !void {
+    pub fn init(buffer: *Buffer, shm: *wl.Shm, width: u32, height: u32) !void {
         // Open a memory backed "file".
         const fd = try os.memfd_create("agertu-shm-buffer-pool", 0);
         defer os.close(fd);
@@ -74,7 +72,7 @@ pub const Buffer = struct {
             wl.Shm.Format.argb8888,
         );
         errdefer wl_buffer.destroy();
-        wl_buffer.setListener(*Self, bufferListener, self);
+        wl_buffer.setListener(*Buffer, bufferListener, buffer);
 
         // Create the pixman image.
         const pixman_image = pixman.Image.createBitsNoClear(
@@ -87,7 +85,7 @@ pub const Buffer = struct {
         errdefer _ = pixman_image.unref();
 
         // The pixman image and the Wayland buffer now share the same memory.
-        self.* = .{
+        buffer.* = .{
             .wl_buffer = wl_buffer,
             .data = data,
             .pixman_image = pixman_image,
@@ -98,19 +96,19 @@ pub const Buffer = struct {
         log.debug("Buffer initialized", .{});
     }
 
-    pub fn destroy(self: *Self) void {
-        if (self.pixman_image) |image| _ = image.unref();
-        if (self.wl_buffer) |wl_buffer| wl_buffer.destroy();
-        os.munmap(self.data);
+    pub fn destroy(buffer: *Buffer) void {
+        if (buffer.pixman_image) |image| _ = image.unref();
+        if (buffer.wl_buffer) |wl_buffer| wl_buffer.destroy();
+        os.munmap(buffer.data);
     }
 
-    fn bufferListener(wl_buffer: *wl.Buffer, event: wl.Buffer.Event, self: *Self) void {
+    fn bufferListener(wl_buffer: *wl.Buffer, event: wl.Buffer.Event, buffer: *Buffer) void {
         switch (event) {
             // Buffer is no longer used by the compositor. The client is free to reuse
             // or destroy this buffer and its backing storage.
             .release => {
-                assert(self.busy);
-                self.busy = false;
+                assert(buffer.busy);
+                buffer.busy = false;
             },
         }
     }

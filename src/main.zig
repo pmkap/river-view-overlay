@@ -22,8 +22,8 @@ const Context = @import("client.zig").Context;
 const gpa = std.heap.c_allocator;
 
 pub fn main() anyerror!void {
-    const context = try gpa.create(Context);
-    defer gpa.destroy(context);
-    try context.init();
-    try context.loop();
+    const ctx = try gpa.create(Context);
+    defer gpa.destroy(ctx);
+    try ctx.init();
+    try ctx.loop();
 }
