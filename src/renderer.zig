@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const fmt = std.fmt;
 
 const fcft = @import("fcft");
 const pixman = @import("pixman");
@@ -29,9 +30,12 @@ pub fn renderBorderedRectangle(
     width: u16,
     height: u16,
     borders_size: u16,
-    background_color: *const pixman.Color,
-    borders_color: *const pixman.Color,
+    background_color: []const u8,
+    borders_color: []const u8,
 ) !void {
+    const bg_color = try parseRgba(background_color);
+    const bd_color = try parseRgba(borders_color);
+
     // Render background
     const background = [1]pixman.Rectangle16{
         .{
@@ -44,7 +48,7 @@ pub fn renderBorderedRectangle(
     _ = pixman.Image.fillRectangles(
         .src,
         image,
-        background_color,
+        &bg_color,
         1,
         &background,
     );
@@ -83,7 +87,7 @@ pub fn renderBorderedRectangle(
     _ = pixman.Image.fillRectangles(
         .src,
         image,
-        borders_color,
+        &bd_color,
         4,
         &borders,
     );
@@ -100,7 +104,9 @@ pub fn renderBytes(
     x_start: i32,
     y_start: i32,
 ) !void {
-    const color = pixman.Image.createSolidFill(foreground).?;
+    const fg = try parseRgba(foreground);
+
+    const color = pixman.Image.createSolidFill(&fg).?;
     defer _ = color.unref();
 
     // Pen position in the surface.
@@ -160,4 +166,27 @@ pub fn renderBytes(
         // Advance pen position.
         pen.x += @intCast(u8, glyph.advance.x);
     }
+}
+
+/// Parse a color in the format 0xRRGGBB or 0xRRGGBBAA
+fn parseRgba(string: []const u8) !pixman.Color {
+    if (string.len != 8 and string.len != 10) return error.InvalidRgba;
+    if (string[0] != '0' or string[1] != 'x') return error.InvalidRgba;
+
+    const r = try fmt.parseInt(u8, string[2..4], 16);
+    const g = try fmt.parseInt(u8, string[4..6], 16);
+    const b = try fmt.parseInt(u8, string[6..8], 16);
+    const a = if (string.len == 10) try fmt.parseInt(u8, string[8..10], 16) else 255;
+
+    const alpha = @floatToInt(u16, (@intToFloat(f32, a) / 255.0) * 65535.0);
+    const red = @floatToInt(u16, ((@intToFloat(f32, r) / 255.0) * 65535.0) * @intToFloat(f32, alpha) / 0xffff);
+    const green = @floatToInt(u16, ((@intToFloat(f32, g) / 255.0) * 65535.0) * @intToFloat(f32, alpha) / 0xffff);
+    const blue = @floatToInt(u16, ((@intToFloat(f32, b) / 255.0) * 65535.0) * @intToFloat(f32, alpha) / 0xffff);
+
+    return pixman.Color{
+        .red = red,
+        .green = green,
+        .blue = blue,
+        .alpha = alpha,
+    };
 }
