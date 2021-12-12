@@ -16,6 +16,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const fmt = std.fmt;
+const mem = std.mem;
 const os = std.os;
 
 const wayland = @import("wayland");
@@ -126,4 +128,35 @@ fn layerSurfaceListener(
             output.surface = null;
         },
     }
+}
+
+/// Parse a string in the format "top:right:bottom:left", e.g. "1:1:0:0".
+fn parseAnchors(string: []const u8) !zwlr.LayerSurfaceV1.Anchor {
+    if (string.len != 7) return error.InvalidAnchors;
+
+    if (string[1] != ':' or string[3] != ':' or string[5] != ':') return error.InvalidAnchors;
+
+    if (string[0] != '0' and string[0] != '1') return error.InvalidAnchors;
+    if (string[2] != '0' and string[2] != '1') return error.InvalidAnchors;
+    if (string[4] != '0' and string[4] != '1') return error.InvalidAnchors;
+    if (string[6] != '0' and string[6] != '1') return error.InvalidAnchors;
+
+    return zwlr.LayerSurfaceV1.Anchor{
+        .top = string[0] == '1',
+        .right = string[2] == '1',
+        .bottom = string[4] == '1',
+        .left = string[6] == '1',
+    };
+}
+
+/// Parse a string in the format "top:right:bottom:left", e.g. "10:5:0:0".
+fn parseMargins(string: []const u8) ![4]i32 {
+    var str = mem.tokenize(string, ":");
+    var ret: [4]i32 = .{ 0, 0, 0, 0 };
+    var i: usize = 0;
+    while (str.next()) |anchor| : (i += 1) {
+        ret[i] = try fmt.parseInt(i32, anchor, 10);
+    }
+
+    return [4]i32{ ret[0], ret[1], ret[2], ret[3] };
 }
