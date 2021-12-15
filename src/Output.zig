@@ -152,8 +152,8 @@ pub fn renderFrame(output: *Output) !void {
         @intCast(u16, buffer.width),
         @intCast(u16, buffer.height),
         config.surface_borders_size,
-        config.surface_color_background,
-        config.surface_color_borders,
+        config.surface_background_color,
+        config.surface_borders_color,
     );
 
     // Render the tags square.
@@ -202,17 +202,17 @@ fn renderTags(
         const occupied = if ((output.view_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
 
         const tag_background_color = blk: {
-            if (focused) break :blk config.tags_color_focused;
-            if (urgent) break :blk config.tags_color_urgent;
-            if (occupied) break :blk config.tags_color_occupied;
-            break :blk config.tags_color_background;
+            if (focused) break :blk config.tags_focused_background_color;
+            if (urgent) break :blk config.tags_urgent_background_color;
+            if (occupied) break :blk config.tags_occupied_background_color;
+            break :blk config.tags_background_color;
         };
 
         const tag_borders_color = blk: {
-            if (focused) break :blk config.tags_color_borders_focused;
-            if (urgent) break :blk config.tags_color_borders_urgent;
-            if (occupied) break :blk config.tags_color_borders_occupied;
-            break :blk config.tags_color_borders;
+            if (focused) break :blk config.tags_focused_borders_color;
+            if (urgent) break :blk config.tags_urgent_borders_color;
+            if (occupied) break :blk config.tags_occupied_borders_color;
+            break :blk config.tags_border_colors;
         };
 
         // Total size of a tag.
@@ -241,10 +241,10 @@ fn renderTags(
             const y_text: i16 = @intCast(i16, config.surface_borders_size + tag_width / 2);
 
             const foreground = blk: {
-                if (focused) break :blk config.tags_color_foreground_focused;
-                if (urgent) break :blk config.tags_color_foreground_urgent;
-                if (occupied) break :blk config.tags_color_foreground_occupied;
-                break :blk config.tags_color_foreground;
+                if (focused) break :blk config.tags_focused_foreground_color;
+                if (urgent) break :blk config.tags_urgent_foreground_color;
+                if (occupied) break :blk config.tags_occupied_foreground_color;
+                break :blk config.tags_foreground_color;
             };
 
             var buf: [2]u8 = undefined;

@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 const std = @import("std");
+const mem = std.mem;
 const os = std.os;
 const time = std.time;
 
@@ -26,10 +27,47 @@ const zriver = wayland.client.zriver;
 const zwlr = wayland.client.zwlr;
 
 const Config = @import("Config.zig");
+const flags = @import("flags.zig");
 const Output = @import("Output.zig");
 
 const gpa = std.heap.c_allocator;
 const log = std.log.scoped(.client);
+
+const usage =
+    \\Usage: agertu [options]
+    \\
+    \\  -h                           Print this help message and exit.
+    \\
+    \\  -surface-bg-color            [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -surface-borders-color       [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -surface-borders-size        [int] (Default 0)
+    \\
+    \\  -set-margins                 [string] Set the surface's margins
+    \\                               "<top>:<right>:<bottom>:<left>"
+    \\                               (Default: "0:10:10:0")
+    \\  -set-anchors                 [string] Set the surface's anchors
+    \\                               "<top>:<right>:<bottom>:<left>"
+    \\                               (Default: "0:1:1:0")
+    \\
+    \\  -no-tags-text                Disable text number in tags
+    \\  -tags-amount                 [int] (Default 9)
+    \\  -tags-square-size            [int] (Default 50)
+    \\  -tags-borders-size           [int] (Default 2)
+    \\  -tags-margins                [int] (Default 5)
+    \\  -tags-bg-color               [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-fg-color               [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-borders-color          [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-focused-bg-color       [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-focused-fg-color       [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-focused-borders-color  [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-occupied-bg-color      [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-occupied-fg-color      [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-occupied-borders-color [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-urgent-bg-color        [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-urgent-fg-color        [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-urgent-borders-color   [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\
+;
 
 /// True when the client can dispatch events. This is set here so it can be
 /// changed by signals handler.
@@ -66,6 +104,8 @@ pub const Context = struct {
             .callback_sync = try display.sync(),
         };
 
+        ctx.config = try ctx.setup();
+
         ctx.registry.setListener(*Context, registryListener, ctx);
         ctx.callback_sync.?.setListener(*Context, callbackListener, ctx);
 
@@ -82,6 +122,120 @@ pub const Context = struct {
 
         ctx.registry.destroy();
         ctx.display.disconnect();
+    }
+
+    pub fn setup(ctx: *Context) !Config {
+        var config: Config = .{};
+
+        // https://github.com/ziglang/zig/issues/7807
+        const argv: [][*:0]const u8 = os.argv;
+        const result = flags.parse(argv[1..], &[_]flags.Flag{
+            .{ .name = "-h", .kind = .boolean },
+            .{ .name = "-surface-bg-color", .kind = .arg },
+            .{ .name = "-surface-borders-color", .kind = .arg },
+            .{ .name = "-surface-borders-size", .kind = .arg },
+            .{ .name = "-set-margins", .kind = .arg },
+            .{ .name = "-set-anchors", .kind = .arg },
+            .{ .name = "-no-tags-text", .kind = .boolean },
+            .{ .name = "-tags-amount", .kind = .arg },
+            .{ .name = "-tags-square-size", .kind = .arg },
+            .{ .name = "-tags-borders-size", .kind = .arg },
+            .{ .name = "-tags-margins", .kind = .arg },
+            .{ .name = "-tags-bg-color", .kind = .arg },
+            .{ .name = "-tags-fg-color", .kind = .arg },
+            .{ .name = "-tags-borders-color", .kind = .arg },
+            .{ .name = "-tags-focused-bg-color", .kind = .arg },
+            .{ .name = "-tags-focused-fg-color", .kind = .arg },
+            .{ .name = "-tags-focused-borders-color", .kind = .arg },
+            .{ .name = "-tags-occupied-bg-color", .kind = .arg },
+            .{ .name = "-tags-occupied-fg-color", .kind = .arg },
+            .{ .name = "-tags-occupied-borders-color", .kind = .arg },
+            .{ .name = "-tags-urgent-bg-color", .kind = .arg },
+            .{ .name = "-tags-urgent-fg-color", .kind = .arg },
+            .{ .name = "-tags-urgent-borders-color", .kind = .arg },
+        }) catch {
+            try std.io.getStdErr().writeAll(usage);
+            os.exit(1);
+        };
+        if (result.args.len != 0) fatalPrintUsage("unknown option '{s}'", .{result.args[0]});
+
+        if (result.boolFlag("-h")) {
+            try std.io.getStdOut().writeAll(usage);
+            os.exit(0);
+        }
+        if (result.argFlag("-surface-bg-color")) |raw| {
+            config.surface_background_color = mem.span(raw);
+        }
+        if (result.argFlag("-surface-borders-color")) |raw| {
+            config.surface_borders_color = mem.span(raw);
+        }
+        if (result.argFlag("-surface-borders-size")) |raw| {
+            config.surface_borders_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+                fatalPrintUsage("invalid value '{s}' provided to -surface-borders-size", .{raw});
+        }
+        if (result.argFlag("-set-anchors")) |raw| {
+            config.layer_anchors = mem.span(raw);
+        }
+        if (result.argFlag("-set-margins")) |raw| {
+            config.layer_margins = mem.span(raw);
+        }
+        if (result.boolFlag("-no-tags-text")) {
+            config.tags_number_text = false;
+        }
+        if (result.argFlag("-tags-amount")) |raw| {
+            config.tags_amount = std.fmt.parseUnsigned(u32, mem.span(raw), 10) catch
+                fatalPrintUsage("invalid value '{s}' provided to -tags-amount", .{raw});
+        }
+        if (result.argFlag("-tags-square-size")) |raw| {
+            config.tags_square_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+                fatalPrintUsage("invalid value '{s}' provided to -tags-square-size", .{raw});
+        }
+        if (result.argFlag("-tags-borders-size")) |raw| {
+            config.tags_borders_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+                fatalPrintUsage("invalid value '{s}' provided to -tags-borders-size", .{raw});
+        }
+        if (result.argFlag("-tags-margins")) |raw| {
+            config.surface_borders_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+                fatalPrintUsage("invalid value '{s}' provided to -tags-margins", .{raw});
+        }
+        if (result.argFlag("-tags-bg-color")) |raw| {
+            config.tags_background_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-fg-color")) |raw| {
+            config.tags_foreground_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-borders-color")) |raw| {
+            config.tags_border_colors = mem.span(raw);
+        }
+        if (result.argFlag("-tags-focused-bg-color")) |raw| {
+            config.tags_focused_background_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-focused-fg-color")) |raw| {
+            config.tags_focused_foreground_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-focused-borders-color")) |raw| {
+            config.tags_focused_borders_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-occupied-bg-color")) |raw| {
+            config.tags_occupied_background_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-occupied-fg-color")) |raw| {
+            config.tags_occupied_foreground_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-occupied-borders-color")) |raw| {
+            config.tags_occupied_borders_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-urgent-bg-color")) |raw| {
+            config.tags_urgent_background_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-urgent-fg-color")) |raw| {
+            config.tags_urgent_foreground_color = mem.span(raw);
+        }
+        if (result.argFlag("-tags-urgent-borders-color")) |raw| {
+            config.tags_urgent_borders_color = mem.span(raw);
+        }
+
+        return config;
     }
 
     pub fn loop(ctx: *Context) !void {
@@ -281,6 +435,12 @@ pub const Signal = struct {
         }
     }
 };
+
+fn fatalPrintUsage(comptime format: []const u8, args: anytype) noreturn {
+    log.err(format, args);
+    std.io.getStdErr().writeAll(usage) catch {};
+    os.exit(1);
+}
 
 fn fatal(comptime format: []const u8, args: anytype) noreturn {
     log.err(format, args);
