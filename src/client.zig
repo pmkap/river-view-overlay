@@ -38,34 +38,36 @@ const usage =
     \\
     \\  -h                           Print this help message and exit.
     \\
-    \\  -surface-bg-color            [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -surface-borders-color       [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -surface-borders-size        [int] (Default 0)
+    \\  -surface-bg-color            <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -surface-borders-color       <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -surface-borders-size        <int> (Default 0)
     \\
-    \\  -set-margins                 [string] Set the surface's margins
-    \\                               "<top>:<right>:<bottom>:<left>"
-    \\                               (Default: "0:10:10:0")
-    \\  -set-anchors                 [string] Set the surface's anchors
-    \\                               "<top>:<right>:<bottom>:<left>"
-    \\                               (Default: "0:1:1:0")
+    \\  -set-margins                 <int>:<int>:<int>:<int>
+    \\                               <top>:<right>:<bottom>:<left>
+    \\                               Set the surface's margins
+    \\                               (Default: 0:10:10:0)
+    \\  -set-anchors                 <int>:<int>:<int>:<int>
+    \\                               <top>:<right>:<bottom>:<left>
+    \\                                Set the surface's anchors
+    \\                               (Default: 0:1:1:0)
     \\
     \\  -no-tags-text                Disable text number in tags
-    \\  -tags-amount                 [int] (Default 9)
-    \\  -tags-square-size            [int] (Default 50)
-    \\  -tags-borders-size           [int] (Default 2)
-    \\  -tags-margins                [int] (Default 5)
-    \\  -tags-bg-color               [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-fg-color               [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-borders-color          [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-focused-bg-color       [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-focused-fg-color       [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-focused-borders-color  [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-occupied-bg-color      [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-occupied-fg-color      [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-occupied-borders-color [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-urgent-bg-color        [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-urgent-fg-color        [string] "0xRRGGBB" or "0xRRGGBBAA"
-    \\  -tags-urgent-borders-color   [string] "0xRRGGBB" or "0xRRGGBBAA"
+    \\  -tags-amount                 <int> (Default 9)
+    \\  -tags-square-size            <int> (Default 50)
+    \\  -tags-borders-size           <int> (Default 2)
+    \\  -tags-margins                <int> (Default 5)
+    \\  -tags-bg-color               <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-fg-color               <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-borders-color          <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-focused-bg-color       <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-focused-fg-color       <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-focused-borders-color  <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-occupied-bg-color      <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-occupied-fg-color      <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-occupied-borders-color <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-urgent-bg-color        <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-urgent-fg-color        <hex> 0xRRGGBB or 0xRRGGBBAA
+    \\  -tags-urgent-borders-color   <hex> 0xRRGGBB or 0xRRGGBBAA
     \\
 ;
 
