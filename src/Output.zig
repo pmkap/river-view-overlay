@@ -276,8 +276,17 @@ fn handleViewTags(output: *Output, tags: *wl.Array) void {
 }
 
 fn handleUrgentTags(output: *Output, tags: u32) void {
+    const old_tags = output.urgent_tags;
     output.urgent_tags = tags;
-    output.updateSurface() catch return;
+    // Only display the popup if the urgent tags are not already focused.
+    if (output.urgent_tags != output.focused_tags) {
+        // Only display the popup when tags become urgent, not when
+        // it loses urgency.
+        const diff = old_tags ^ output.urgent_tags;
+        if ((diff & output.urgent_tags) > 0) {
+            output.updateSurface() catch return;
+        }
+    }
 }
 
 fn outputStatuslistener(
