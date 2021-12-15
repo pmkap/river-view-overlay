@@ -164,75 +164,75 @@ pub const Context = struct {
             os.exit(0);
         }
         if (result.argFlag("-surface-bg-color")) |raw| {
-            config.surface_background_color = mem.span(raw);
+            config.surface_background_color = raw;
         }
         if (result.argFlag("-surface-borders-color")) |raw| {
-            config.surface_borders_color = mem.span(raw);
+            config.surface_borders_color = raw;
         }
         if (result.argFlag("-surface-borders-size")) |raw| {
-            config.surface_borders_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+            config.surface_borders_size = std.fmt.parseUnsigned(u16, raw, 10) catch
                 fatalPrintUsage("invalid value '{s}' provided to -surface-borders-size", .{raw});
         }
         if (result.argFlag("-set-anchors")) |raw| {
-            config.layer_anchors = mem.span(raw);
+            config.layer_anchors = raw;
         }
         if (result.argFlag("-set-margins")) |raw| {
-            config.layer_margins = mem.span(raw);
+            config.layer_margins = raw;
         }
         if (result.boolFlag("-no-tags-text")) {
             config.tags_number_text = false;
         }
         if (result.argFlag("-tags-amount")) |raw| {
-            config.tags_amount = std.fmt.parseUnsigned(u32, mem.span(raw), 10) catch
+            config.tags_amount = std.fmt.parseUnsigned(u32, raw, 10) catch
                 fatalPrintUsage("invalid value '{s}' provided to -tags-amount", .{raw});
         }
         if (result.argFlag("-tags-square-size")) |raw| {
-            config.tags_square_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+            config.tags_square_size = std.fmt.parseUnsigned(u16, raw, 10) catch
                 fatalPrintUsage("invalid value '{s}' provided to -tags-square-size", .{raw});
         }
         if (result.argFlag("-tags-borders-size")) |raw| {
-            config.tags_borders_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+            config.tags_borders_size = std.fmt.parseUnsigned(u16, raw, 10) catch
                 fatalPrintUsage("invalid value '{s}' provided to -tags-borders-size", .{raw});
         }
         if (result.argFlag("-tags-margins")) |raw| {
-            config.surface_borders_size = std.fmt.parseUnsigned(u16, mem.span(raw), 10) catch
+            config.surface_borders_size = std.fmt.parseUnsigned(u16, raw, 10) catch
                 fatalPrintUsage("invalid value '{s}' provided to -tags-margins", .{raw});
         }
         if (result.argFlag("-tags-bg-color")) |raw| {
-            config.tags_background_color = mem.span(raw);
+            config.tags_background_color = raw;
         }
         if (result.argFlag("-tags-fg-color")) |raw| {
-            config.tags_foreground_color = mem.span(raw);
+            config.tags_foreground_color = raw;
         }
         if (result.argFlag("-tags-borders-color")) |raw| {
-            config.tags_border_colors = mem.span(raw);
+            config.tags_border_colors = raw;
         }
         if (result.argFlag("-tags-focused-bg-color")) |raw| {
-            config.tags_focused_background_color = mem.span(raw);
+            config.tags_focused_background_color = raw;
         }
         if (result.argFlag("-tags-focused-fg-color")) |raw| {
-            config.tags_focused_foreground_color = mem.span(raw);
+            config.tags_focused_foreground_color = raw;
         }
         if (result.argFlag("-tags-focused-borders-color")) |raw| {
-            config.tags_focused_borders_color = mem.span(raw);
+            config.tags_focused_borders_color = raw;
         }
         if (result.argFlag("-tags-occupied-bg-color")) |raw| {
-            config.tags_occupied_background_color = mem.span(raw);
+            config.tags_occupied_background_color = raw;
         }
         if (result.argFlag("-tags-occupied-fg-color")) |raw| {
-            config.tags_occupied_foreground_color = mem.span(raw);
+            config.tags_occupied_foreground_color = raw;
         }
         if (result.argFlag("-tags-occupied-borders-color")) |raw| {
-            config.tags_occupied_borders_color = mem.span(raw);
+            config.tags_occupied_borders_color = raw;
         }
         if (result.argFlag("-tags-urgent-bg-color")) |raw| {
-            config.tags_urgent_background_color = mem.span(raw);
+            config.tags_urgent_background_color = raw;
         }
         if (result.argFlag("-tags-urgent-fg-color")) |raw| {
-            config.tags_urgent_foreground_color = mem.span(raw);
+            config.tags_urgent_foreground_color = raw;
         }
         if (result.argFlag("-tags-urgent-borders-color")) |raw| {
-            config.tags_urgent_borders_color = mem.span(raw);
+            config.tags_urgent_borders_color = raw;
         }
 
         return config;
