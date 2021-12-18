@@ -134,53 +134,61 @@ pub fn BufferStack(comptime T: type) type {
         first: ?*Node = null,
         last: ?*Node = null,
 
+        /// Number of node in the stack.
+        len: usize = 0,
+
         /// Add a node to the bottom of the stack.
-        pub fn append(self: *Self, new_node: *Node) void {
+        pub fn append(stack: *Self, new_node: *Node) void {
             // Set the prev/next pointers of the new node
-            new_node.prev = self.last;
+            new_node.prev = stack.last;
             new_node.next = null;
 
-            if (self.last) |last| {
+            if (stack.last) |last| {
                 // If the list is not empty, set the next pointer of the current
                 // first node to the new node.
                 last.next = new_node;
             } else {
                 // If the list is empty set the first pointer to the new node.
-                self.first = new_node;
+                stack.first = new_node;
             }
 
             // Set the last pointer to the new node
-            self.last = new_node;
+            stack.last = new_node;
+
+            stack.len += 1;
         }
 
         /// Remove a node from the buffer stack.
-        pub fn remove(self: *Self, target_node: *Node) void {
+        pub fn remove(stack: *Self, target_node: *Node) void {
             // Set the previous node/list head to the next pointer
             if (target_node.prev) |prev_node| {
                 prev_node.next = target_node.next;
             } else {
-                self.first = target_node.next;
+                stack.first = target_node.next;
             }
 
             // Set the next node/list tail to the previous pointer
             if (target_node.next) |next_node| {
                 next_node.prev = target_node.prev;
             } else {
-                self.last = target_node.prev;
+                stack.last = target_node.prev;
             }
+
+            stack.len -= 1;
+            assert(stack.len == 0 or (stack.first != null and stack.last != null));
         }
 
         /// Remove and return the last node in the list.
-        pub fn pop(self: *Self) ?*Node {
-            const last = self.last orelse return null;
-            self.remove(last);
+        pub fn pop(stack: *Self) ?*Node {
+            const last = stack.last orelse return null;
+            stack.remove(last);
             return last;
         }
 
         /// Remove and return the first node in the list.
-        pub fn popFirst(self: *Self) ?*Node {
-            const first = self.first orelse return null;
-            self.remove(first);
+        pub fn popFirst(stack: *Self) ?*Node {
+            const first = stack.first orelse return null;
+            stack.remove(first);
             return first;
         }
 
@@ -245,6 +253,8 @@ test "append/remove/pop (*Buffer)" {
     buffers.append(four); // {3, 1, 4}
     buffers.append(five); // {3, 1, 4, 5}
     buffers.append(two); // {3, 1, 4, 5, 2}
+
+    try testing.expect(buffers.len == 5);
 
     // Simple insertion
     {
@@ -352,12 +362,11 @@ test "append/remove/pop (*Buffer)" {
     }
 
     // Clear
-    buffers.remove(four);
     buffers.remove(two);
     buffers.remove(three);
-    buffers.remove(one);
     buffers.remove(five);
 
+    try testing.expect(buffers.len == 0);
     try testing.expect(buffers.first == null);
     try testing.expect(buffers.last == null);
 }
