@@ -85,10 +85,10 @@ pub fn getOutputStatus(output: *Output) !void {
 /// If a surface alreadu exists use it, else initialize a new one.
 pub fn updateSurface(output: *Output) !void {
     if (output.surface) |surface| {
-        log.debug("Surface found, using it", .{});
+        log.debug("Surface available, using it", .{});
         try output.renderFrame();
     } else {
-        log.debug("No Surface found, creating one", .{});
+        log.debug("No Surface available, creating one", .{});
         const surface = try gpa.create(Surface);
         errdefer gpa.destroy(surface);
         output.surface = surface;
@@ -101,32 +101,26 @@ fn notBusyFilter(buffer: *Buffer, context: void) bool {
     return !buffer.busy;
 }
 
+// TODO: Could be improved, not sure if double buffering works as expected.
 /// Return the next Buffer not busy or create a new one if none
 /// are available.
 pub fn getNextBuffer(output: *Output) !*Buffer {
     const surface = output.surface.?;
-    var ret: ?*Buffer = null;
     var it = BufferStack(Buffer).iter(surface.buffer_stack.first, .forward, {}, notBusyFilter);
     while (it.next()) |buf| {
-        if (buf.width != surface.width or buf.height != surface.height or
-            buf.wl_buffer == null)
-        {
+        if (buf.width != surface.width or buf.height != surface.height) {
             buf.destroy();
-            ret = null;
-            break;
+            try buf.init(output.ctx.shm.?, surface.width, surface.height);
         }
-        ret = buf;
+        log.debug("Buffer available, using it", .{});
+        return buf;
     }
 
-    if (ret == null) {
-        log.debug("No Buffer available, creating one", .{});
-        const new_buffer_node = try gpa.create(BufferStack(Buffer).Node);
-        try new_buffer_node.buffer.init(output.ctx.shm.?, surface.width, surface.height);
-        surface.buffer_stack.append(new_buffer_node);
-        ret = &new_buffer_node.buffer;
-    }
-
-    return ret.?;
+    log.debug("No Buffer available, creating one", .{});
+    const new_buffer_node = try gpa.create(BufferStack(Buffer).Node);
+    try new_buffer_node.buffer.init(output.ctx.shm.?, surface.width, surface.height);
+    surface.buffer_stack.append(new_buffer_node);
+    return &new_buffer_node.buffer;
 }
 
 /// Draw and commit a frame.

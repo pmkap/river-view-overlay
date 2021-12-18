@@ -114,6 +114,8 @@ pub const Buffer = struct {
     }
 };
 
+/// A specialized doubly-linked stack that allows for filtered iteration
+/// over the nodes. T must be Buffer or *Buffer.
 pub fn BufferStack(comptime T: type) type {
     if (!(T == Buffer or T == *Buffer)) {
         @compileError("BufferStack: T must be Buffer or *Buffer");
