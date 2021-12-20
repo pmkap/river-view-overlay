@@ -36,6 +36,12 @@ const log = std.log.scoped(.output);
 
 const Output = @This();
 
+const View = struct {
+    app_id: [*:0]const u8,
+    title: [*:0]const u8,
+    focused: bool,
+};
+
 wl_output: *wl.Output,
 name: u32,
 
@@ -49,6 +55,8 @@ font: *fcft.Font = undefined,
 focused_tags: u32 = 0,
 view_tags: u32 = 0,
 urgent_tags: u32 = 0,
+
+views: std.TailQueue(View) = .{},
 
 configured: bool = false,
 
@@ -82,17 +90,18 @@ pub fn getOutputStatus(output: *Output) !void {
     output.configured = true;
 }
 
-/// If a surface alreadu exists use it, else initialize a new one.
-pub fn updateSurface(output: *Output) !void {
+/// If a surface already exists use it, else initialize a new one.
+pub fn updateSurface(output: *Output, width: u32, height: u32) !void {
     if (output.surface) |surface| {
         log.debug("Surface available, using it", .{});
+        surface.setSize(width, height);
         try output.renderFrame();
     } else {
         log.debug("No Surface available, creating one", .{});
         const surface = try gpa.create(Surface);
         errdefer gpa.destroy(surface);
         output.surface = surface;
-        try output.surface.?.init(output);
+        try output.surface.?.init(output, width, height);
     }
 }
 
@@ -139,24 +148,19 @@ pub fn renderFrame(output: *Output) !void {
     // Then attach to the buffer, damage the buffer and finally commit our surface.
     //
     // Render the background surface.
-    try renderer.renderBorderedRectangle(
-        image,
-        0,
-        0,
-        @intCast(u16, buffer.width),
-        @intCast(u16, buffer.height),
-        config.surface_borders_size,
-        config.surface_background_color,
-        config.surface_borders_color,
-    );
+    //try renderer.renderBorderedRectangle(
+    //    image,
+    //    0,
+    //    0,
+    //    @intCast(u16, buffer.width),
+    //    @intCast(u16, buffer.height),
+    //    config.surface_borders_size,
+    //    "0x0000ff",
+    //    config.surface_borders_color,
+    //);
 
-    // Render the tags square.
-    try output.renderTags(
-        image,
-        config.tags_square_size,
-        config.tags_borders_size,
-        config.tags_margins,
-    );
+    // Render views
+    try output.renderViews(image);
 
     if (surface.wl_surface) |wl_surface| {
         wl_surface.attach(buffer.wl_buffer, 0, 0);
@@ -177,110 +181,73 @@ pub fn renderFrame(output: *Output) !void {
     surface.wl_surface.?.commit();
 }
 
-/// Render a bordered square for each tags with or without a number
-/// text inside it.
-fn renderTags(
-    output: *Output,
-    image: *pixman.Image,
-    square_size: u16,
-    borders_size: u16,
-    margins: u16,
-) !void {
-    const config = output.ctx.config;
-
-    var i: u32 = 0;
-    while (i < config.tags_amount) : (i += 1) {
-        // Tags state.
-        const focused = if ((output.focused_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
-        const urgent = if ((output.urgent_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
-        const occupied = if ((output.view_tags & (@as(u32, 1) << @intCast(u5, i))) != 0) true else false;
-
-        const tag_background_color = blk: {
-            if (focused) break :blk config.tags_focused_background_color;
-            if (urgent) break :blk config.tags_urgent_background_color;
-            if (occupied) break :blk config.tags_occupied_background_color;
-            break :blk config.tags_background_color;
-        };
-
-        const tag_borders_color = blk: {
-            if (focused) break :blk config.tags_focused_borders_color;
-            if (urgent) break :blk config.tags_urgent_borders_color;
-            if (occupied) break :blk config.tags_occupied_borders_color;
-            break :blk config.tags_border_colors;
-        };
-
-        // Total size of a tag.
-        const tag_width: u32 = square_size + margins;
-
-        // Starting point of all tags.
-        const x_start: i16 = @intCast(i16, config.surface_borders_size + margins);
-        // Starting point of each tag square.
-        const x_square: i16 = x_start + @intCast(i16, i * tag_width);
-
+fn renderViews(output: *Output, image: *pixman.Image) !void {
+    var i: i16 = 0;
+    var it = output.views.first;
+    while (it) |node| : (it = node.next) {
         // Render the bordered square.
         try renderer.renderBorderedRectangle(
             image,
-            x_square,
-            x_start,
-            square_size,
-            square_size,
-            borders_size,
-            tag_background_color,
-            tag_borders_color,
+            0,
+            i * 30,
+            300,
+            30,
+            output.ctx.config.tags_borders_size,
+            "0x000000",
+            if (node.data.focused) "0xffff00" else "0x000000",
+        );
+        // Render text
+        var buf: [100]u8 = undefined;
+        var view_title = try fmt.bufPrint(&buf, "{s}", .{node.data.title});
+        try renderer.renderBytes(
+            image,
+            view_title,
+            output.font,
+            "0xffffff",
+            0,
+            i * 30,
         );
 
-        // Render the tag number inside the square.
-        if (config.tags_number_text) {
-            const x_text: i16 = x_start + @intCast(i16, margins + borders_size + i * tag_width);
-            const y_text: i16 = @intCast(i16, config.surface_borders_size + tag_width / 2);
-
-            const foreground = blk: {
-                if (focused) break :blk config.tags_focused_foreground_color;
-                if (urgent) break :blk config.tags_urgent_foreground_color;
-                if (occupied) break :blk config.tags_occupied_foreground_color;
-                break :blk config.tags_foreground_color;
-            };
-
-            var buf: [2]u8 = undefined;
-            var tag_number = try fmt.bufPrint(&buf, "{}", .{i + 1});
-            try renderer.renderBytes(
-                image,
-                tag_number,
-                output.font,
-                foreground,
-                x_text,
-                y_text,
-            );
-        }
+        i += 1;
     }
 }
 
 fn handleFocusedTags(output: *Output, tags: u32) void {
     output.focused_tags = tags;
-    output.updateSurface() catch return;
 }
 
-fn handleViewTags(output: *Output, tags: *wl.Array) void {
-    output.view_tags = 0;
-    for (tags.slice(u32)) |tag| {
-        output.view_tags |= tag;
+fn handleViewsBegin(output: *Output) void {
+    // for now only do something on tag 1
+    if (output.focused_tags != 1) return;
+
+    // cleanup views
+    while (output.views.pop()) |node| {
+        std.heap.c_allocator.destroy(node);
     }
-    // Only update if the Surface already exists.
-    if (output.surface != null) output.updateSurface() catch return;
 }
 
-fn handleUrgentTags(output: *Output, tags: u32) void {
-    const old_tags = output.urgent_tags;
-    output.urgent_tags = tags;
-    // Only display the popup if the urgent tags are not already focused.
-    if (output.urgent_tags != output.focused_tags) {
-        // Only display the popup when tags become urgent, not when
-        // it loses urgency.
-        const diff = old_tags ^ output.urgent_tags;
-        if ((diff & output.urgent_tags) > 0) {
-            output.updateSurface() catch return;
-        }
-    }
+fn handleView(output: *Output, app_id: [*:0]const u8, title: [*:0]const u8, focused: u32) void {
+    // for now only do something on tag 1
+    if (output.focused_tags != 1) return;
+
+    const view = View{
+        .app_id = app_id,
+        .title = title,
+        .focused = if (focused == 0) false else true,
+    };
+    const node = std.heap.c_allocator.create(std.TailQueue(View).Node) catch return;
+    node.data = view;
+    output.views.append(node);
+}
+
+fn handleViewsDone(output: *Output) void {
+    // for now only do something on tag 1
+    if (output.focused_tags != 1) return;
+
+    const num_views = @intCast(u32, output.views.len);
+    if (num_views == 0) return;
+
+    output.updateSurface(300, 30 * num_views) catch return;
 }
 
 fn outputStatuslistener(
@@ -290,7 +257,9 @@ fn outputStatuslistener(
 ) void {
     switch (event) {
         .focused_tags => |ev| output.handleFocusedTags(ev.tags),
-        .view_tags => |ev| output.handleViewTags(ev.tags),
-        .urgent_tags => |ev| output.handleUrgentTags(ev.tags),
+        .view => |ev| output.handleView(ev.app_id, ev.title, ev.focused),
+        .views_done => |ev| output.handleViewsDone(),
+        .views_begin => |ev| output.handleViewsBegin(),
+        else => {},
     }
 }

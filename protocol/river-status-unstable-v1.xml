@@ -83,6 +83,29 @@
       </description>
       <arg name="tags" type="uint" summary="32-bit bitfield"/>
     </event>
+
+    <event name="view">
+      <description summary="Information on one view">
+        Send AppId and Title of a view and if it is focused.
+        If it is used successively the views_done event can be sent
+        afterwards.
+      </description>
+      <arg name="app_id" type="string" summary="AppId of the view"/>
+      <arg name="title" type="string" summary="Title of the view"/>
+      <arg name="focused" type="uint" summary="focused or not"/>
+    </event>
+
+    <event name="views_begin">
+      <description summary="Done sending the above">
+        Start sending multiple views events.
+      </description>
+    </event>
+
+    <event name="views_done">
+      <description summary="Done sending the above">
+        Sent after multiple views events are transmitted.
+      </description>
+    </event>
   </interface>
 
   <interface name="zriver_seat_status_v1" version="1">

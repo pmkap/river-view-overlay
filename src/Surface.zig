@@ -48,7 +48,7 @@ last_frame: os.timespec = undefined,
 /// True once the layer_surface received the configure event.
 configured: bool = false,
 
-pub fn init(surface: *Surface, output: *Output) !void {
+pub fn init(surface: *Surface, output: *Output, width: u32, height: u32) !void {
     const config = output.ctx.config;
 
     const wl_surface = try output.ctx.compositor.?.createSurface();
@@ -62,11 +62,8 @@ pub fn init(surface: *Surface, output: *Output) !void {
     surface.* = .{
         .wl_surface = wl_surface,
         .layer_surface = layer_surface,
-        .width = config.tags_amount * config.tags_square_size +
-            (config.tags_amount + 1) * config.tags_margins + 2 * config.surface_borders_size,
-        // "1" for now and will change if some things are added later.
-        .height = 1 * (config.tags_square_size + 2 * config.tags_margins) +
-            (2 * config.surface_borders_size),
+        .width = width,
+        .height = height,
     };
 
     // Configure the layer_surface.
@@ -104,6 +101,12 @@ pub fn destroy(surface: *Surface) void {
 
     gpa.destroy(surface);
     log.debug("Surface destroyed", .{});
+}
+
+pub fn setSize(surface: *Surface, width: u32, height: u32) void {
+    surface.width = width;
+    surface.height = height;
+    (surface.layer_surface orelse return).setSize(width, height);
 }
 
 fn layerSurfaceListener(
